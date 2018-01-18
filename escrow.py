@@ -27,6 +27,9 @@ error_codes = {
     500: "There was an unexpected server error"
 }
 
+class EscrowAPIError(Exception):
+    pass
+
 class Authorization(object):
 
     def __init__(self, api_secret, api_key, account_email, password):
@@ -82,9 +85,11 @@ class Transaction(Base):
     def finish(self):
         api_url = self.escrowapi.create_api_url('transaction')
         response = requests.post(
-            api_url, auth=self.auth, json=self.to_dict()
+            api_url, auth=self.escrowapi.auth, json=self.to_dict()
         )
-        if 200 != status_code:
+        status_code = response.status_code
+        print status_code
+        if status_code < 200 or status_code >= 300:
             text = response.text or error_codes[status_code]
             raise EscrowAPIError(text)
         return response.json()
@@ -144,7 +149,7 @@ class EscrowAPI(object):
 
     @property
     def auth(self):
-        authorization = self.authentication
+        authorization = self.authorization
         return authorization.account_email, authorization.api_key
 
     @property
@@ -222,10 +227,10 @@ class EscrowAPI(object):
             raise EscrowAPIError(text)
         return response.json()
 
-    def create_transaction(self, seller_email, currency='usd',
-                                 description=None):
+    def create_transaction(self, buyer_email='me', seller_email=None,
+                                 currency='usd', description=None):
         return Transaction(
-            self, buyer_email='me', seller_email=seller_email,
+            self, buyer_email=buyer_email, seller_email=seller_email,
             currency=currency, description=description
         )
 
@@ -244,11 +249,10 @@ def main():
         account_email, password=password
     )
 
-    # escrowapi.transaction()
     # print escrowapi.me()
-    # 
-    transaction = Transaction(
-        buyer_email='me', seller_email='keanu.reaves@escrow.com',
+
+    transaction = escrowapi.create_transaction(
+        seller_email='keanu.reaves@escrow.com',
         currency='usd', description='johnwick.com'
     )
     transaction_item = TransactionItem(
@@ -260,9 +264,9 @@ def main():
         beneficiary_customer='keanu.reaves@escrow.com'
     )
     transaction.add_item(transaction_item)
-
-    ret = transaction_item.to_dict()
-    ret = transaction.to_dict()
+    #ret = transaction_item.to_dict()
+    #ret = transaction.to_dict()
+    ret = transaction.finish()
     import json
     print json.dumps(ret, indent=4)
 
